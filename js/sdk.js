@@ -1,215 +1,87 @@
-(function (root) {
+(function(root){
   'use strict';
-  var RS = root.RS = root.RS || {};
+  var RS=root.RS=root.RS||{};
+  var DEFAULTS={v:2,best:0,bestCombo:1,bestTime:0,runs:0,totalShards:0,totalNearMisses:0,music:.78,sfx:1,tutorialSeen:false};
 
-  // ---------------------------------------------------------------------------
-  // Save codec: versioned, tolerant of garbage/legacy/foreign fields.
-  // ---------------------------------------------------------------------------
+  function copy(){return JSON.parse(JSON.stringify(DEFAULTS));}
+  function n(v,d){var x=Number(v);return isFinite(x)&&x>=0?Math.floor(x):d;}
+  function f(v,d){var x=Number(v);return isFinite(x)&&x>=0&&x<=1?x:d;}
+  function yt(){try{return root.ytgame||null;}catch(e){return null;}}
+  function inEnv(){try{var y=yt();return !!(y&&y.IN_PLAYABLES_ENV);}catch(e){return false;}}
+  var state={loaded:false,first:false,ready:false};
+  var LOCAL_KEY='ringshift-save';
+  function localGet(){try{return root.localStorage?root.localStorage.getItem(LOCAL_KEY):null;}catch(e){return null;}}
+  function localSet(str){try{if(root.localStorage)root.localStorage.setItem(LOCAL_KEY,str);}catch(e){}}
 
-  var DEFAULTS = {
-    v: 1,
-    best: 0,
-    music: 0.8,
-    sfx: 1.0,
-    gamesPlayed: 0,
-    totalGems: 0,
-    tutorialSeen: false
-  };
-
-  function cloneDefaults() {
-    return JSON.parse(JSON.stringify(DEFAULTS));
-  }
-
-  function coerceCount(value, fallback) {
-    var n = Number(value);
-    if (!isFinite(n) || n < 0) return fallback;
-    return Math.floor(n);
-  }
-
-  function coerceVolume(value, fallback) {
-    var n = Number(value);
-    if (typeof value === 'boolean' || value === null || value === '' ||
-        !isFinite(n) || n < 0 || n > 1) return fallback;
-    return n;
-  }
-
-  RS.saveCodec = {
-    DEFAULTS: DEFAULTS,
-
-    parse: function (str) {
-      var raw = null;
-      if (typeof str === 'string' && str.length) {
-        try { raw = JSON.parse(str); } catch (e) { raw = null; }
-      }
-      if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) raw = {};
-      var out = cloneDefaults();
-      for (var key in raw) {
-        if (Object.prototype.hasOwnProperty.call(raw, key)) out[key] = raw[key];
-      }
-      out.v = coerceCount(raw.v, DEFAULTS.v) || DEFAULTS.v;
-      out.best = coerceCount(raw.best, DEFAULTS.best);
-      out.gamesPlayed = coerceCount(raw.gamesPlayed, DEFAULTS.gamesPlayed);
-      out.totalGems = coerceCount(raw.totalGems, DEFAULTS.totalGems);
-      out.music = coerceVolume(raw.music, DEFAULTS.music);
-      out.sfx = coerceVolume(raw.sfx, DEFAULTS.sfx);
-      out.tutorialSeen = !!raw.tutorialSeen;
+  RS.saveCodec={
+    DEFAULTS:DEFAULTS,
+    parse:function(str){
+      var raw={};
+      if(typeof str==='string'&&str.length){try{raw=JSON.parse(str)||{};}catch(e){raw={};}}
+      if(!raw||typeof raw!=='object'||Array.isArray(raw))raw={};
+      var out=copy();
+      Object.keys(raw).forEach(function(k){out[k]=raw[k];});
+      out.v=n(raw.v,DEFAULTS.v)||DEFAULTS.v;
+      out.best=n(raw.best,0);out.bestCombo=Math.max(1,n(raw.bestCombo,1));
+      out.bestTime=Math.max(0,Number(raw.bestTime)||0);out.runs=n(raw.runs,0);
+      out.totalShards=n(raw.totalShards,0);out.totalNearMisses=n(raw.totalNearMisses,0);
+      out.music=f(raw.music,DEFAULTS.music);out.sfx=f(raw.sfx,DEFAULTS.sfx);
+      out.tutorialSeen=!!raw.tutorialSeen;
       return out;
     },
-
-    serialize: function (obj) {
-      return JSON.stringify(obj);
-    }
+    serialize:function(obj){return JSON.stringify(obj);}
   };
 
-  // ---------------------------------------------------------------------------
-  // ytgame wrapper. Every touch of the ytgame global is lazy and guarded:
-  // caught SdkError may be `undefined`, so catch blocks never inspect it.
-  // ---------------------------------------------------------------------------
+  function logError(){try{var y=yt();if(y&&y.health&&y.health.logError)y.health.logError();}catch(e){}}
 
-  var LOCAL_KEY = 'ringshift-save';
-  var state = { loaded: false, firstFrameSent: false, gameReadySent: false };
-
-  function yt() {
-    try { return root.ytgame || null; } catch (e) { return null; }
-  }
-
-  function inEnv() {
-    try {
-      var y = yt();
-      return !!(y && y.IN_PLAYABLES_ENV);
-    } catch (e) { return false; }
-  }
-
-  function logErrorSafe() {
-    try {
-      var y = yt();
-      if (y && y.health) y.health.logError();
-    } catch (e) { /* best effort */ }
-  }
-
-  function localGet() {
-    try {
-      if (root.localStorage) return root.localStorage.getItem(LOCAL_KEY);
-    } catch (e) { /* storage may be unavailable */ }
-    return null;
-  }
-
-  function localSet(str) {
-    try {
-      if (root.localStorage) root.localStorage.setItem(LOCAL_KEY, str);
-    } catch (e) { /* storage may be unavailable */ }
-  }
-
-  RS.sdk = {
-    get inEnv() { return inEnv(); },
-
-    _reset: function () {
-      state.loaded = false;
-      state.firstFrameSent = false;
-      state.gameReadySent = false;
-    },
-
-    init: function () {
-      if (!inEnv()) {
-        state.loaded = true;
-        return Promise.resolve({ save: RS.saveCodec.parse(localGet()), lang: 'en' });
-      }
-      var loadP, langP;
-      try { loadP = yt().game.loadData(); } catch (e) { loadP = Promise.reject(); }
-      try { langP = yt().system.getLanguage(); } catch (e) { langP = Promise.reject(); }
-      return Promise.allSettled([loadP, langP]).then(function (results) {
-        state.loaded = true;
-        var save = RS.saveCodec.parse(
-          results[0].status === 'fulfilled' ? results[0].value : undefined
-        );
-        var lang = (results[1].status === 'fulfilled' && typeof results[1].value === 'string')
-          ? results[1].value : 'en';
-        return { save: save, lang: lang };
+  RS.sdk={
+    get inEnv(){return inEnv();},
+    init:function(){
+      if(!inEnv()){state.loaded=true;return Promise.resolve({save:RS.saveCodec.parse(localGet()),lang:'en'});}
+      var loadP,langP;
+      try{loadP=yt().game.loadData();}catch(e){loadP=Promise.reject();}
+      try{langP=yt().system.getLanguage();}catch(e){langP=Promise.reject();}
+      return Promise.allSettled([loadP,langP]).then(function(r){
+        state.loaded=true;
+        return{
+          save:RS.saveCodec.parse(r[0].status==='fulfilled'?r[0].value:undefined),
+          lang:r[1].status==='fulfilled'&&typeof r[1].value==='string'?r[1].value:'en'
+        };
       });
     },
-
-    firstFrameReady: function () {
-      if (state.firstFrameSent) return;
-      state.firstFrameSent = true;
-      try {
-        var y = yt();
-        if (y && y.game) y.game.firstFrameReady();
-      } catch (e) { /* non-fatal */ }
+    firstFrameReady:function(){
+      if(state.first)return;state.first=true;
+      try{var y=yt();if(y&&y.game)y.game.firstFrameReady();}catch(e){}
     },
-
-    gameReady: function () {
-      if (state.gameReadySent) return;
-      this.firstFrameReady();
-      state.gameReadySent = true;
-      try {
-        var y = yt();
-        if (y && y.game) y.game.gameReady();
-      } catch (e) { /* non-fatal */ }
+    gameReady:function(){
+      if(state.ready)return;this.firstFrameReady();state.ready=true;
+      try{var y=yt();if(y&&y.game)y.game.gameReady();}catch(e){}
     },
-
-    // Persists the session save object. Drops silently until init() has
-    // settled loadData — saveData before loadData is rejected by YouTube.
-    save: function (obj) {
-      if (!state.loaded) return Promise.resolve();
-      var str;
-      try { str = RS.saveCodec.serialize(obj); } catch (e) { return Promise.resolve(); }
-      if (!inEnv()) {
-        localSet(str);
-        return Promise.resolve();
-      }
-      try {
-        return Promise.resolve(yt().game.saveData(str)).catch(function () {
-          logErrorSafe();
-        });
-      } catch (e) {
-        logErrorSafe();
-        return Promise.resolve();
-      }
+    save:function(obj){
+      if(!state.loaded)return Promise.resolve();
+      var str;try{str=RS.saveCodec.serialize(obj);}catch(e){return Promise.resolve();}
+      if(!inEnv()){localSet(str);return Promise.resolve();}
+      try{return Promise.resolve(yt().game.saveData(str)).catch(logError);}catch(e){logError();return Promise.resolve();}
     },
-
-    sendScore: function (n) {
-      var value = Math.floor(Number(n));
-      if (!isFinite(value) || value < 0) value = 0;
-      if (!inEnv()) return Promise.resolve();
-      try {
-        return Promise.resolve(yt().engagement.sendScore({ value: value })).catch(function () {
-          logErrorSafe();
-        });
-      } catch (e) {
-        logErrorSafe();
-        return Promise.resolve();
-      }
+    sendBestScore:function(value){
+      if(!inEnv())return Promise.resolve();
+      var v=Math.max(0,Math.floor(Number(value)||0));
+      try{return Promise.resolve(yt().engagement.sendScore({value:v})).catch(logError);}catch(e){logError();return Promise.resolve();}
     },
-
-    isAudioEnabled: function () {
-      if (!inEnv()) return true;
-      try { return !!yt().system.isAudioEnabled(); } catch (e) { return true; }
+    isAudioEnabled:function(){
+      if(!inEnv())return true;
+      try{return !!yt().system.isAudioEnabled();}catch(e){return true;}
     },
-
-    onAudioEnabledChange: function (cb) {
-      try {
-        var y = yt();
-        if (y && y.system) return y.system.onAudioEnabledChange(cb) || function () {};
-      } catch (e) { /* non-fatal */ }
-      return function () {};
+    onAudioEnabledChange:function(cb){
+      try{var y=yt();return y&&y.system&&y.system.onAudioEnabledChange?y.system.onAudioEnabledChange(cb)||function(){}:function(){};}catch(e){return function(){};}
     },
-
-    onPause: function (cb) {
-      try {
-        var y = yt();
-        if (y && y.system) return y.system.onPause(cb) || function () {};
-      } catch (e) { /* non-fatal */ }
-      return function () {};
+    onPause:function(cb){
+      try{var y=yt();return y&&y.system&&y.system.onPause?y.system.onPause(cb)||function(){}:function(){};}catch(e){return function(){};}
     },
-
-    onResume: function (cb) {
-      try {
-        var y = yt();
-        if (y && y.system) return y.system.onResume(cb) || function () {};
-      } catch (e) { /* non-fatal */ }
-      return function () {};
+    onResume:function(cb){
+      try{var y=yt();return y&&y.system&&y.system.onResume?y.system.onResume(cb)||function(){}:function(){};}catch(e){return function(){};}
     },
-
-    logError: logErrorSafe
+    logError:logError,
+    _debugState:function(){return JSON.parse(JSON.stringify(state));}
   };
-})(typeof window !== 'undefined' ? window : globalThis);
+})(typeof window!=='undefined'?window:globalThis);

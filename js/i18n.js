@@ -1,138 +1,20 @@
-(function (root) {
+(function(root){
   'use strict';
-  var RS = root.RS = root.RS || {};
-
-  var STRINGS = {
-    en: {
-      loading: 'Loading…',
-      tagline: 'Hop rings. Dodge. Survive.',
-      play: 'Play',
-      settings: 'Settings',
-      music: 'Music',
-      sfx: 'Sound effects',
-      close: 'Close',
-      paused: 'Paused',
-      resume: 'Resume',
-      menu: 'Menu',
-      gameOver: 'Game over',
-      score: 'Score',
-      best: 'Best',
-      newBest: 'New best!',
-      playAgain: 'Play again',
-      howtoHint: 'Tap to switch rings',
-      pause: 'Pause'
-    },
-    es: {
-      loading: 'Cargando…',
-      tagline: 'Salta de anillo. Esquiva. Sobrevive.',
-      play: 'Jugar',
-      settings: 'Ajustes',
-      music: 'Música',
-      sfx: 'Efectos de sonido',
-      close: 'Cerrar',
-      paused: 'Pausa',
-      resume: 'Reanudar',
-      menu: 'Menú',
-      gameOver: 'Fin de la partida',
-      score: 'Puntuación',
-      best: 'Récord',
-      newBest: '¡Nuevo récord!',
-      playAgain: 'Jugar otra vez',
-      howtoHint: 'Toca para cambiar de anillo',
-      pause: 'Pausa'
-    },
-    pt: {
-      loading: 'Carregando…',
-      tagline: 'Pule de anel. Desvie. Sobreviva.',
-      play: 'Jogar',
-      settings: 'Opções',
-      music: 'Música',
-      sfx: 'Efeitos sonoros',
-      close: 'Fechar',
-      paused: 'Pausado',
-      resume: 'Continuar',
-      menu: 'Menu',
-      gameOver: 'Fim de jogo',
-      score: 'Pontuação',
-      best: 'Recorde',
-      newBest: 'Novo recorde!',
-      playAgain: 'Jogar de novo',
-      howtoHint: 'Toque para trocar de anel',
-      pause: 'Pausa'
-    },
-    fr: {
-      loading: 'Chargement…',
-      tagline: "Sautez d'anneau. Esquivez. Survivez.",
-      play: 'Jouer',
-      settings: 'Réglages',
-      music: 'Musique',
-      sfx: 'Effets sonores',
-      close: 'Fermer',
-      paused: 'Pause',
-      resume: 'Reprendre',
-      menu: 'Menu',
-      gameOver: 'Partie terminée',
-      score: 'Score',
-      best: 'Record',
-      newBest: 'Nouveau record !',
-      playAgain: 'Rejouer',
-      howtoHint: "Touchez pour changer d'anneau",
-      pause: 'Pause'
-    },
-    de: {
-      loading: 'Lädt…',
-      tagline: 'Wechsle Ringe. Weiche aus. Überlebe.',
-      play: 'Spielen',
-      settings: 'Einstellungen',
-      music: 'Musik',
-      sfx: 'Soundeffekte',
-      close: 'Schließen',
-      paused: 'Pausiert',
-      resume: 'Fortsetzen',
-      menu: 'Menü',
-      gameOver: 'Spiel vorbei',
-      score: 'Punkte',
-      best: 'Rekord',
-      newBest: 'Neuer Rekord!',
-      playAgain: 'Nochmal spielen',
-      howtoHint: 'Tippe, um den Ring zu wechseln',
-      pause: 'Pause'
+  var RS=root.RS=root.RS||{};
+  var S={
+    en:{loading:'Charging orbit…',eyebrow:'ONE-TOUCH ORBIT ARCADE',tagline:'Shift rings. Thread danger. Chase the flow.',startRun:'START RUN',howTo:'HOW TO PLAY',settings:'AUDIO',best:'BEST',bestCombo:'BEST CHAIN',score:'SCORE',chain:'CHAIN',tapShift:'TAP TO SHIFT',tapShiftSub:'Switch rings before impact',howTitle:'Read the orbit. Shift at the last moment.',howShift:'SHIFT',howShiftBody:'Tap, click, or press Space to jump between the inner and outer ring.',howCharge:'CHARGE',howChargeBody:'Collect shards and skim hazards to build your chain and fill FLOW.',howRush:'OVERDRIVE',howRushBody:'Fill FLOW to ignite a short ×2 scoring burst. Survive to keep it alive.',gotIt:'GOT IT',audioSettings:'Audio',music:'Music',sfx:'Sound effects',done:'DONE',runComplete:'RUN COMPLETE',holdTheLine:'HOLD THE LINE',newBest:'NEW BEST',survived:'SURVIVED',closeCalls:'CLOSE CALLS',runAgain:'RUN AGAIN',titleScreen:'TITLE SCREEN'},
+    fr:{loading:'Charge de l’orbite…',eyebrow:'ARCADE ORBITALE À UNE TOUCHE',tagline:'Changez d’anneau. Frôlez le danger. Gardez le flow.',startRun:'LANCER',howTo:'COMMENT JOUER',settings:'AUDIO',best:'RECORD',bestCombo:'MEILLEURE CHAÎNE',score:'SCORE',chain:'CHAÎNE',tapShift:'TOUCHEZ POUR CHANGER',tapShiftSub:'Changez d’anneau avant l’impact',howTitle:'Lisez l’orbite. Changez au dernier instant.',howShift:'CHANGER',howShiftBody:'Touchez, cliquez ou appuyez sur Espace pour passer d’un anneau à l’autre.',howCharge:'CHARGER',howChargeBody:'Ramassez les éclats et frôlez les dangers pour remplir le FLOW.',howRush:'SURCHARGE',howRushBody:'Remplissez le FLOW pour déclencher brièvement un score ×2.',gotIt:'COMPRIS',audioSettings:'Audio',music:'Musique',sfx:'Effets sonores',done:'OK',runComplete:'COURSE TERMINÉE',holdTheLine:'TENEZ LA LIGNE',newBest:'NOUVEAU RECORD',survived:'SURVIE',closeCalls:'FRÔLEMENTS',runAgain:'REJOUER',titleScreen:'ÉCRAN TITRE'},
+    es:{loading:'Cargando órbita…',eyebrow:'ARCADE ORBITAL DE UN TOQUE',tagline:'Cambia de anillo. Roza el peligro. Mantén el flow.',startRun:'EMPEZAR',howTo:'CÓMO JUGAR',settings:'AUDIO',best:'RÉCORD',bestCombo:'MEJOR CADENA',score:'PUNTOS',chain:'CADENA',tapShift:'TOCA PARA CAMBIAR',tapShiftSub:'Cambia de anillo antes del impacto',howTitle:'Lee la órbita. Cambia en el último instante.',howShift:'CAMBIA',howShiftBody:'Toca, haz clic o pulsa Espacio para saltar entre los dos anillos.',howCharge:'CARGA',howChargeBody:'Recoge fragmentos y roza peligros para cargar FLOW.',howRush:'SOBRECARGA',howRushBody:'Llena FLOW para activar un breve multiplicador ×2.',gotIt:'ENTENDIDO',audioSettings:'Audio',music:'Música',sfx:'Efectos',done:'LISTO',runComplete:'PARTIDA TERMINADA',holdTheLine:'AGUANTA',newBest:'NUEVO RÉCORD',survived:'TIEMPO',closeCalls:'ROCES',runAgain:'OTRA VEZ',titleScreen:'INICIO'},
+    pt:{loading:'Carregando órbita…',eyebrow:'ARCADE ORBITAL DE UM TOQUE',tagline:'Troque de anel. Raspe o perigo. Mantenha o flow.',startRun:'COMEÇAR',howTo:'COMO JOGAR',settings:'ÁUDIO',best:'RECORDE',bestCombo:'MELHOR COMBO',score:'PONTOS',chain:'COMBO',tapShift:'TOQUE PARA TROCAR',tapShiftSub:'Troque de anel antes do impacto',howTitle:'Leia a órbita. Troque no último instante.',howShift:'TROCAR',howShiftBody:'Toque, clique ou pressione Espaço para alternar entre os anéis.',howCharge:'CARREGAR',howChargeBody:'Colete fragmentos e passe perto dos perigos para encher FLOW.',howRush:'OVERDRIVE',howRushBody:'Encha FLOW para ativar temporariamente pontuação ×2.',gotIt:'ENTENDI',audioSettings:'Áudio',music:'Música',sfx:'Efeitos',done:'OK',runComplete:'CORRIDA ENCERRADA',holdTheLine:'SEGURE A LINHA',newBest:'NOVO RECORDE',survived:'TEMPO',closeCalls:'QUASE',runAgain:'DE NOVO',titleScreen:'INÍCIO'},
+    de:{loading:'Orbit wird geladen…',eyebrow:'ONE-TOUCH ORBIT ARCADE',tagline:'Wechsle Ringe. Streife Gefahr. Halte den Flow.',startRun:'START',howTo:'SO SPIELST DU',settings:'AUDIO',best:'BESTE',bestCombo:'BESTE KETTE',score:'PUNKTE',chain:'KETTE',tapShift:'TIPPE ZUM WECHSELN',tapShiftSub:'Wechsle vor dem Aufprall',howTitle:'Lies den Orbit. Wechsle im letzten Moment.',howShift:'WECHSELN',howShiftBody:'Tippe, klicke oder drücke Leertaste, um zwischen den Ringen zu wechseln.',howCharge:'LADEN',howChargeBody:'Sammle Splitter und streife Gefahren, um FLOW zu laden.',howRush:'OVERDRIVE',howRushBody:'Fülle FLOW für einen kurzen ×2-Punkte-Boost.',gotIt:'VERSTANDEN',audioSettings:'Audio',music:'Musik',sfx:'Soundeffekte',done:'FERTIG',runComplete:'RUN BEENDET',holdTheLine:'HALTE DURCH',newBest:'NEUER REKORD',survived:'ÜBERLEBT',closeCalls:'KNAPP',runAgain:'NOCHMAL',titleScreen:'STARTBILDSCHIRM'}
+  };
+  RS.i18n={
+    locale:'en',STRINGS:S,
+    setLocale:function(tag){var b=typeof tag==='string'?tag.toLowerCase().split('-')[0]:'en';this.locale=S[b]?b:'en';},
+    t:function(k){return(S[this.locale]&&S[this.locale][k])||S.en[k]||k;},
+    apply:function(doc){
+      if(!doc||!doc.querySelectorAll)return;
+      Array.prototype.forEach.call(doc.querySelectorAll('[data-i18n]'),function(n){n.textContent=RS.i18n.t(n.getAttribute('data-i18n'));});
     }
   };
-
-  RS.i18n = {
-    STRINGS: STRINGS,
-    locale: 'en',
-
-    // Accepts a BCP-47 tag from ytgame.system.getLanguage (e.g. "pt-BR",
-    // "es-419"). Matches on the base language; unsupported -> 'en'.
-    setLocale: function (tag) {
-      var base = 'en';
-      if (typeof tag === 'string' && tag.length) {
-        base = tag.toLowerCase().split('-')[0];
-      }
-      this.locale = Object.prototype.hasOwnProperty.call(STRINGS, base) ? base : 'en';
-    },
-
-    t: function (key) {
-      var table = STRINGS[this.locale] || STRINGS.en;
-      if (Object.prototype.hasOwnProperty.call(table, key)) return table[key];
-      if (Object.prototype.hasOwnProperty.call(STRINGS.en, key)) return STRINGS.en[key];
-      return key;
-    },
-
-    // Browser only: stamp every [data-i18n] element with its translation,
-    // and every [data-i18n-aria] element's aria-label.
-    apply: function (doc) {
-      if (!doc || !doc.querySelectorAll) return;
-      var nodes = doc.querySelectorAll('[data-i18n]');
-      for (var i = 0; i < nodes.length; i++) {
-        nodes[i].textContent = this.t(nodes[i].getAttribute('data-i18n'));
-      }
-      var ariaNodes = doc.querySelectorAll('[data-i18n-aria]');
-      for (var j = 0; j < ariaNodes.length; j++) {
-        ariaNodes[j].setAttribute('aria-label', this.t(ariaNodes[j].getAttribute('data-i18n-aria')));
-      }
-    }
-  };
-})(typeof window !== 'undefined' ? window : globalThis);
+})(typeof window!=='undefined'?window:globalThis);

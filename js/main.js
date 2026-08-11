@@ -1,351 +1,128 @@
-(function (root) {
+(function(root){
   'use strict';
-  var RS = root.RS = root.RS || {};
-  var doc = root.document;
-  if (!doc) return; // browser-only module
+  var RS=root.RS=root.RS||{},doc=root.document;if(!doc)return;
+  var STATE={SPLASH:'splash',MENU:'menu',PLAYING:'playing',DYING:'dying',GAMEOVER:'gameover'};
+  var state=STATE.SPLASH,game=null,save=null,renderer=null;
+  var raf=0,last=0,clock=0,shake=0,deathDelay=0,calloutUntil=0,sdkPaused=false,reduced=false,tutorial=false;
 
-  var STATE = { SPLASH: 'splash', MENU: 'menu', PLAYING: 'playing', PAUSED: 'paused', GAMEOVER: 'gameover' };
+  try{var mq=root.matchMedia&&root.matchMedia('(prefers-reduced-motion: reduce)');reduced=!!(mq&&mq.matches);if(mq&&mq.addEventListener)mq.addEventListener('change',function(e){reduced=e.matches;});}catch(e){}
 
-  var appState = STATE.SPLASH;
-  var game = null;
-  var renderer = null;
-  var save = null;
-  var last = 0;
-  var elapsed = 0;
-  var shake = 0;
-  var slowmo = 0; // seconds of slow motion remaining
-  var deathHandled = false;
-  var hintVisible = false;
-  var reducedMotion = false;
-  var sdkPaused = false;
-  var rafRunning = false;
+  function persist(){return save?RS.sdk.save(save):Promise.resolve();}
+  function animateCallout(text,kind,dur){RS.ui.callout(text,kind);calloutUntil=clock+(dur||.72);}
+  function startLoop(){if(raf||sdkPaused)return;last=0;raf=root.requestAnimationFrame(frame);}
+  function stopLoop(){if(raf){root.cancelAnimationFrame(raf);raf=0;}last=0;}
 
-  try {
-    var mq = root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)');
-    reducedMotion = !!(mq && mq.matches);
-    if (mq && mq.addEventListener) {
-      mq.addEventListener('change', function (ev) { reducedMotion = ev.matches; });
-    }
-  } catch (e) { /* media queries unavailable */ }
-
-  function persist() {
-    RS.sdk.save(save);
+  function startGame(){
+    RS.audio.init();RS.audio.resume();RS.audio.startMusic();RS.audio.setOverdrive(false);
+    game=RS.createGame({});state=STATE.PLAYING;deathDelay=0;shake=0;renderer.clearFx();RS.ui.resetHud();RS.ui.showScreen('play');
+    tutorial=!save.tutorialSeen;RS.ui.setTutorial(tutorial);last=0;
+  }
+  function toMenu(){
+    game=null;state=STATE.MENU;RS.audio.stopMusic();RS.audio.setOverdrive(false);RS.ui.setTutorial(false);RS.ui.clearCallout();RS.ui.setMenu(save);RS.ui.showScreen('menu');
+    try{doc.getElementById('btn-play').focus({preventScroll:true});}catch(e){}
+  }
+  function endRun(){
+    if(!game)return;
+    state=STATE.GAMEOVER;RS.audio.stopMusic();RS.audio.setOverdrive(false);
+    var score=game.score,isNew=score>save.best;
+    save.runs+=1;save.totalShards+=game.shards;save.totalNearMisses+=game.nearMisses;
+    save.bestCombo=Math.max(save.bestCombo,game.bestCombo);save.bestTime=Math.max(save.bestTime,game.time);
+    if(isNew){save.best=score;RS.audio.sfx('best');}
+    // Persist the exact best-score value before sending that same dimension
+    // to YouTube engagement. The SDK wrapper swallows transient SDK errors.
+    persist().then(function(){return RS.sdk.sendBestScore(save.best);});
+    RS.ui.setTutorial(false);RS.ui.showGameOver({score:score,time:game.time,combo:game.bestCombo,near:game.nearMisses,newBest:isNew});
   }
 
-  function startGame() {
-    game = RS.createGame({});
-    deathHandled = false;
-    slowmo = 0;
-    shake = 0;
-    renderer.clearFx();
-    RS.ui.resetHud();
-    RS.ui.showPlay();
-    appState = STATE.PLAYING;
-    last = 0;
+  function processEvents(){
+    while(game&&game.events.length){
+      var ev=game.events.shift();renderer.onEvent(ev,game);
+      if(ev.type==='hop')RS.audio.sfx('hop');
+      else if(ev.type==='mine-armed')RS.audio.sfx('armed');
+      else if(ev.type==='shard')RS.audio.sfx('shard');
+      else if(ev.type==='nearmiss'){RS.audio.sfx('close');animateCallout('CLOSE CALL','rush',.62);}
+      else if(ev.type==='precision'){RS.audio.sfx('perfect');animateCallout('PERFECT SHIFT  ×'+ev.combo,'perfect',.78);}
+      else if(ev.type==='overdrive-start'){RS.audio.setOverdrive(true);RS.audio.sfx('rush');animateCallout('OVERDRIVE  ×2','rush',1.0);shake=Math.max(shake,.36);}
+      else if(ev.type==='overdrive-end'){RS.audio.setOverdrive(false);}
+      else if(ev.type==='milestone'){RS.audio.sfx('milestone');animateCallout(ev.value+'s  //  SPEED UP','',.72);}
+      else if(ev.type==='death'){RS.audio.sfx('death');shake=1;deathDelay=.48;state=STATE.DYING;}
+    }
+  }
+
+  function frame(ts){
+    raf=0;if(sdkPaused)return;
+    raf=root.requestAnimationFrame(frame);
+    if(!last){last=ts;return;}
+    var dt=Math.min((ts-last)/1000,.05);last=ts;clock+=dt;shake=Math.max(0,shake-dt*2.1);
+    if(calloutUntil&&clock>=calloutUntil){calloutUntil=0;RS.ui.clearCallout();}
+
+    if(state===STATE.PLAYING&&game){
+      game.update(dt);processEvents();RS.ui.updateHud(game);
+    }else if(state===STATE.DYING&&game){
+      deathDelay-=dt;if(deathDelay<=0)endRun();
+    }
+    renderer.draw(game,(state===STATE.MENU||state===STATE.SPLASH)?{t:clock,dt:dt,shake:0,reducedMotion:reduced}:{t:clock,dt:dt,shake:shake,reducedMotion:reduced});
+  }
+
+  function shift(){
+    if(sdkPaused||RS.ui.topOverlay())return;
     RS.audio.init();
-    RS.audio.resume();
-    RS.audio.startMusic();
-    if (!save.tutorialSeen) {
-      hintVisible = true;
-      RS.ui.setHint(true);
+    if(state===STATE.PLAYING&&game){
+      if(tutorial){tutorial=false;save.tutorialSeen=true;RS.ui.setTutorial(false);persist();}
+      game.hop();
+    }
+  }
+  function isUiTarget(t){return !!(t&&t.closest&&t.closest('button,input,.overlay,.menu-card,.result-card'));}
+  function onKey(e){
+    if(e.key==='Escape'){
+      var top=RS.ui.topOverlay();if(top)RS.ui.close(top);
+      return; // never preventDefault on Esc
+    }
+    if(e.code==='Space'||e.key==='Enter'||e.key==='ArrowUp'){
+      if(RS.ui.topOverlay())return;
+      if(state===STATE.PLAYING){e.preventDefault();shift();}
+      else if(state===STATE.MENU||state===STATE.GAMEOVER){e.preventDefault();startGame();}
     }
   }
 
-  function pauseGame() {
-    if (appState !== STATE.PLAYING) return;
-    appState = STATE.PAUSED;
-    RS.audio.suspend();
-    RS.ui.openOverlay('pause');
-    persist();
-  }
-
-  function resumeFromOverlay() {
-    if (appState !== STATE.PAUSED) return;
-    RS.ui.closeOverlay('pause');
-    if (RS.ui.topOverlay() === 'settings') RS.ui.closeOverlay('settings');
-    appState = STATE.PLAYING;
-    last = 0; // avoid a huge dt jump on the next frame
-    RS.audio.init();
-    RS.audio.resume();
-    RS.audio.startMusic();
-  }
-
-  function endGame() {
-    appState = STATE.GAMEOVER;
-    RS.audio.stopMusic();
-    var score = game.score;
-    save.gamesPlayed += 1;
-    save.totalGems += game.gems;
-    var isNew = score > save.best;
-    if (isNew) {
-      save.best = score;
-      RS.audio.sfx('fanfare');
+  function setSdkPaused(v){
+    sdkPaused=!!v;
+    if(sdkPaused){
+      persist();stopLoop();RS.audio.suspend();doc.documentElement.classList.add('sdk-frozen');doc.getElementById('sdk-paused').classList.remove('hidden');
+    }else{
+      doc.documentElement.classList.remove('sdk-frozen');doc.getElementById('sdk-paused').classList.add('hidden');RS.audio.resume();
+      if(state===STATE.PLAYING)RS.audio.startMusic();startLoop();
     }
-    persist();
-    // Saved best is updated first, so the score YouTube keeps as the user's
-    // highest always matches the best stored in the game save.
-    RS.sdk.sendScore(score);
-    RS.ui.setHint(false);
-    RS.ui.showGameOver({ score: score, best: save.best, isNew: isNew });
   }
 
-  function toMenu() {
-    appState = STATE.MENU;
-    game = null;
-    RS.audio.stopMusic();
-    RS.ui.closeOverlay('pause');
-    RS.ui.closeOverlay('settings');
-    RS.ui.setHint(false);
-    RS.ui.updateMenuBest(save.best);
-    RS.ui.show('menu');
-  }
+  function boot(){
+    renderer=RS.createRenderer(doc.getElementById('game-canvas'));
+    renderer.draw(null,{t:0,dt:0,shake:0,reducedMotion:reduced});
+    RS.sdk.firstFrameReady();
 
-  function onHopInput() {
-    RS.audio.init();
-    if (appState !== STATE.PLAYING || !game) return;
-    if (hintVisible) {
-      hintVisible = false;
-      RS.ui.setHint(false);
-      save.tutorialSeen = true;
-      persist();
-    }
-    game.hop();
-  }
+    root.addEventListener('resize',function(){renderer.resize();});
+    doc.addEventListener('pointerdown',function(e){if(!isUiTarget(e.target))shift();},{passive:true});
+    doc.addEventListener('keydown',onKey);
 
-  function isUiTarget(target) {
-    if (!target || !target.closest) return false;
-    return !!target.closest('button, input, .overlay, #screen-menu, #screen-gameover');
-  }
+    RS.ui.bind({
+      play:startGame,menu:toMenu,sfx:function(){RS.audio.init();RS.audio.sfx('ui');},
+      music:function(v){save.music=v;RS.audio.setMusic(v);persist();},
+      sfxVolume:function(v){save.sfx=v;RS.audio.setSfx(v);persist();}
+    });
 
-  function frame(ts) {
-    // SDK pause halts ALL execution including rendering (certification
-    // requirement); the loop restarts from the onResume callback.
-    if (sdkPaused) {
-      rafRunning = false;
-      return;
-    }
-    root.requestAnimationFrame(frame);
-    frameCount++;
-    if (!last) { last = ts; return; }
-    var dt = Math.min((ts - last) / 1000, 0.05);
-    last = ts;
-    elapsed += dt;
+    RS.sdk.onAudioEnabledChange(function(v){RS.audio.setEnabled(v);});
+    RS.sdk.onPause(function(){setSdkPaused(true);});
+    RS.sdk.onResume(function(){setSdkPaused(false);});
 
-    var simDt = dt;
-    if (slowmo > 0) {
-      slowmo -= dt;
-      simDt = dt * 0.25;
-    }
-
-    if (appState === STATE.PLAYING && game) {
-      game.update(simDt);
-      var events = game.events.splice(0);
-      for (var i = 0; i < events.length; i++) {
-        var ev = events[i];
-        if (ev.type === 'hop') {
-          RS.audio.sfx('hop');
-        } else if (ev.type === 'gem') {
-          RS.audio.sfx('gem', { combo: ev.combo });
-          var gp = renderer.shipPos(game);
-          renderer.spawnBurst(gp.x, gp.y, '#ffd54d', reducedMotion ? 6 : 14);
-        } else if (ev.type === 'nearmiss') {
-          RS.audio.sfx('nearmiss');
-          var np = renderer.shipPos(game);
-          renderer.spawnBurst(np.x, np.y, '#4de3ff', reducedMotion ? 4 : 8, 0.7);
-          shake = Math.max(shake, 0.15);
-        } else if (ev.type === 'death') {
-          RS.audio.sfx('death');
-          var dp = renderer.shipPos(game);
-          renderer.spawnBurst(dp.x, dp.y, '#4de3ff', reducedMotion ? 15 : 40, 1.6);
-          renderer.spawnBurst(dp.x, dp.y, '#ff4da6', reducedMotion ? 8 : 20, 1.2);
-          shake = 1;
-          slowmo = 0.6;
-          deathHandled = false;
-        }
-      }
-      if (game.state === 'over' && !deathHandled) {
-        deathHandled = true;
-        setTimeout(endGame, 650);
-      }
-      RS.ui.updateHud(game);
-    }
-
-    shake *= 0.9;
-
-    var showGame = game !== null;
-    renderer.draw(showGame ? game : null, {
-      t: elapsed,
-      dt: dt,
-      shake: shake,
-      reducedMotion: reducedMotion,
-      showShip: !(game && game.state === 'over'),
-      idleAngle: showGame ? null : elapsed * 0.5
+    RS.sdk.init().then(function(data){
+      save=data.save;RS.i18n.setLocale(data.lang);RS.i18n.apply(doc);
+      RS.audio.setEnabled(RS.sdk.isAudioEnabled());RS.audio.setMusic(save.music);RS.audio.setSfx(save.sfx);RS.ui.setSliders(save.music,save.sfx);
+      toMenu();RS.sdk.gameReady();startLoop();
+    }).catch(function(){
+      save=RS.saveCodec.parse();toMenu();RS.sdk.gameReady();startLoop();
     });
   }
 
-  function startLoop() {
-    if (rafRunning) return;
-    rafRunning = true;
-    last = 0;
-    root.requestAnimationFrame(frame);
-  }
-
-  var frameCount = 0;
-
-  // Read-only hooks for the automated verification harness (tools/verify.js).
-  RS.debug = {
-    game: function () { return game; },
-    state: function () { return appState; },
-    frames: function () { return frameCount; },
-    save: function () { return save; }
-  };
-
-  function wireInput() {
-    doc.addEventListener('pointerdown', function (ev) {
-      if (isUiTarget(ev.target)) return;
-      onHopInput();
-    });
-
-    doc.addEventListener('keydown', function (ev) {
-      var key = ev.key;
-      if (key === 'Escape') {
-        // Never preventDefault on Escape (certification requirement).
-        var top = RS.ui.topOverlay();
-        if (top === 'settings') {
-          RS.audio.sfx('ui');
-          RS.ui.closeOverlay('settings');
-          persist();
-        } else if (appState === STATE.PAUSED) {
-          resumeFromOverlay();
-        }
-        return;
-      }
-      if (key === ' ' || key === 'ArrowUp' || key === 'Enter') {
-        var active = doc.activeElement;
-        if (active && (active.tagName === 'BUTTON' || active.tagName === 'INPUT')) {
-          return; // let native button/slider activation work
-        }
-        if (appState === STATE.PLAYING) {
-          if (key === ' ') ev.preventDefault(); // stop page scroll only
-          onHopInput();
-        }
-      }
-    });
-
-    root.addEventListener('resize', function () {
-      renderer.resize();
-    });
-  }
-
-  function wireSdk() {
-    RS.sdk.onPause(function () {
-      // YouTube pause or imminent eviction: freeze everything including the
-      // render loop, and flush the save within the short eviction window.
-      sdkPaused = true;
-      if (appState === STATE.PLAYING) {
-        pauseGame();
-      } else {
-        RS.audio.suspend();
-        persist();
-      }
-    });
-
-    RS.sdk.onResume(function () {
-      // Rendering may restart; gameplay stays on the Paused overlay until
-      // the player explicitly taps Resume.
-      sdkPaused = false;
-      startLoop();
-      if (appState !== STATE.PAUSED) RS.audio.resume();
-    });
-
-    RS.audio.setEnabled(RS.sdk.isAudioEnabled());
-    RS.sdk.onAudioEnabledChange(function (on) {
-      RS.audio.setEnabled(on);
-    });
-  }
-
-  function wireUi() {
-    RS.ui.bindOnce({
-      onPlay: function () {
-        RS.audio.init();
-        RS.audio.sfx('ui');
-        startGame();
-      },
-      onPause: function () {
-        RS.audio.sfx('ui');
-        pauseGame();
-      },
-      onResume: function () {
-        RS.audio.sfx('ui');
-        resumeFromOverlay();
-      },
-      onMenu: function () {
-        RS.audio.sfx('ui');
-        toMenu();
-      },
-      onSettingsOpen: function () {
-        RS.audio.init();
-        RS.audio.sfx('ui');
-        RS.ui.openOverlay('settings');
-      },
-      onSettingsClose: function () {
-        RS.audio.sfx('ui');
-        RS.ui.closeOverlay('settings');
-        persist();
-      },
-      onMusic: function (v) {
-        RS.audio.init();
-        save.music = v;
-        RS.audio.setMusicVolume(v);
-      },
-      onSfx: function (v) {
-        RS.audio.init();
-        save.sfx = v;
-        RS.audio.setSfxVolume(v);
-        RS.audio.sfx('ui');
-      }
-    });
-  }
-
-  function boot() {
-    // Splash is rendering: tell YouTube the first frame is visible.
-    root.requestAnimationFrame(function () {
-      RS.sdk.firstFrameReady();
-    });
-
-    root.addEventListener('error', function () { RS.sdk.logError(); });
-    root.addEventListener('unhandledrejection', function () { RS.sdk.logError(); });
-
-    renderer = RS.createRenderer(doc.getElementById('game-canvas'));
-
-    RS.sdk.init().then(function (result) {
-      save = result.save;
-      RS.i18n.setLocale(result.lang);
-      RS.i18n.apply(doc);
-      doc.documentElement.lang = RS.i18n.locale;
-
-      RS.audio.setMusicVolume(save.music);
-      RS.audio.setSfxVolume(save.sfx);
-      RS.ui.setSliders(save.music, save.sfx);
-
-      wireInput();
-      wireSdk();
-      wireUi();
-
-      RS.ui.updateMenuBest(save.best);
-      RS.ui.show('menu');
-      appState = STATE.MENU;
-
-      startLoop();
-
-      // Menu is interactive now — and only now.
-      RS.sdk.gameReady();
-    });
-  }
-
-  if (doc.readyState === 'loading') {
-    doc.addEventListener('DOMContentLoaded', boot);
-  } else {
-    boot();
-  }
-})(typeof window !== 'undefined' ? window : globalThis);
+  RS.debug={state:function(){return state;},game:function(){return game;},save:function(){return save;},renderer:function(){return renderer;},sdkPaused:function(){return sdkPaused;}};
+  if(doc.readyState==='loading')doc.addEventListener('DOMContentLoaded',boot);else boot();
+})(typeof window!=='undefined'?window:globalThis);

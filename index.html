@@ -1,11 +1,15 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Ringshift</title>
+  <meta name="color-scheme" content="dark">
+  <title>RingShift</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%234de3ff' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%234de3ff'/%3E%3C/svg%3E">
+
+  <!-- YouTube Playables SDK MUST load before any game code. -->
   <script src="https://www.youtube.com/game_api/v1"></script>
+
   <link rel="stylesheet" href="css/style.css">
   <script src="js/sdk.js" defer></script>
   <script src="js/i18n.js" defer></script>
@@ -16,61 +20,148 @@
   <script src="js/main.js" defer></script>
 </head>
 <body>
-  <canvas id="game-canvas"></canvas>
+  <main id="app" aria-label="RingShift arcade game">
+    <canvas id="game-canvas" aria-hidden="true"></canvas>
 
-  <div id="splash" class="screen">
-    <h1 class="title neon">RINGSHIFT</h1>
-    <p class="loading-pulse" data-i18n="loading">Loading…</p>
-  </div>
-
-  <div id="screen-menu" class="screen hidden">
-    <h1 class="title neon">RINGSHIFT</h1>
-    <p class="tagline" data-i18n="tagline">Hop rings. Dodge. Survive.</p>
-    <p id="menu-best" class="menu-best hidden"></p>
-    <button id="btn-play" class="btn btn-primary" data-i18n="play">Play</button>
-    <button id="btn-settings" class="btn btn-secondary" data-i18n="settings">Settings</button>
-  </div>
-
-  <div id="hud" class="hidden">
-    <div id="hud-score" class="hud-score">0</div>
-    <div id="hud-combo" class="hud-combo hidden">x1</div>
-    <button id="btn-pause" class="btn btn-icon" aria-label="Pause" data-i18n-aria="pause">II</button>
-  </div>
-
-  <div id="howto-hint" class="hint hidden" data-i18n="howtoHint">Tap to switch rings</div>
-
-  <div id="overlay-pause" class="overlay hidden">
-    <div class="panel">
-      <h2 data-i18n="paused">Paused</h2>
-      <button id="btn-resume" class="btn btn-primary" data-i18n="resume">Resume</button>
-      <button id="btn-pause-menu" class="btn btn-secondary" data-i18n="menu">Menu</button>
-    </div>
-  </div>
-
-  <div id="overlay-settings" class="overlay hidden">
-    <div class="panel">
-      <h2 data-i18n="settings">Settings</h2>
-      <div class="setting-row">
-        <label for="slider-music" data-i18n="music">Music</label>
-        <input type="range" id="slider-music" min="0" max="100" value="80">
+    <section id="screen-splash" class="screen splash">
+      <div class="brand-lockup">
+        <div class="brand-mark" aria-hidden="true">
+          <span class="ring ring-a"></span><span class="ring ring-b"></span><span class="core-dot"></span>
+        </div>
+        <h1 class="game-title">RING<span>SHIFT</span></h1>
       </div>
-      <div class="setting-row">
-        <label for="slider-sfx" data-i18n="sfx">Sound effects</label>
-        <input type="range" id="slider-sfx" min="0" max="100" value="100">
-      </div>
-      <button id="btn-close-settings" class="btn btn-primary" data-i18n="close">Close</button>
-    </div>
-  </div>
+      <p class="loading" data-i18n="loading">Charging orbit…</p>
+    </section>
 
-  <div id="screen-gameover" class="screen hidden">
-    <div class="panel">
-      <h2 data-i18n="gameOver">Game over</h2>
-      <p id="over-newbest" class="newbest hidden" data-i18n="newBest">New best!</p>
-      <div class="score-row"><span data-i18n="score">Score</span><span id="over-score">0</span></div>
-      <div class="score-row"><span data-i18n="best">Best</span><span id="over-best">0</span></div>
-      <button id="btn-again" class="btn btn-primary" data-i18n="playAgain">Play again</button>
-      <button id="btn-over-menu" class="btn btn-secondary" data-i18n="menu">Menu</button>
+    <section id="screen-menu" class="screen hidden" aria-label="Main menu">
+      <div class="menu-card glass">
+        <div class="eyebrow" data-i18n="eyebrow">ONE-TOUCH ORBIT ARCADE</div>
+        <div class="brand-lockup compact">
+          <div class="brand-mark" aria-hidden="true">
+            <span class="ring ring-a"></span><span class="ring ring-b"></span><span class="core-dot"></span>
+          </div>
+          <h1 class="game-title">RING<span>SHIFT</span></h1>
+        </div>
+        <p class="tagline" data-i18n="tagline">Shift rings. Thread danger. Chase the flow.</p>
+
+        <div id="menu-stats" class="menu-stats hidden">
+          <div><span data-i18n="best">BEST</span><strong id="menu-best">0</strong></div>
+          <div><span data-i18n="bestCombo">BEST CHAIN</span><strong id="menu-combo">x1</strong></div>
+        </div>
+
+        <button id="btn-play" class="btn btn-primary">
+          <span data-i18n="startRun">START RUN</span>
+          <span class="btn-key">SPACE</span>
+        </button>
+
+        <div class="menu-actions">
+          <button id="btn-how" class="btn btn-ghost" data-i18n="howTo">HOW TO PLAY</button>
+          <button id="btn-settings" class="btn btn-ghost" data-i18n="settings">AUDIO</button>
+        </div>
+
+        <div class="feature-row" aria-hidden="true">
+          <span>1 TAP</span><i></i><span>2 RINGS</span><i></i><span>∞ RUN</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="hud" class="hud hidden" aria-live="polite">
+      <div class="hud-left glass-chip">
+        <span class="hud-label" data-i18n="score">SCORE</span>
+        <strong id="hud-score">0</strong>
+      </div>
+
+      <div class="hud-center">
+        <div id="status-kicker" class="status-kicker">FLOW</div>
+        <div class="flow-track" aria-label="Flow charge">
+          <span id="flow-fill"></span>
+          <b id="flow-spark"></b>
+        </div>
+        <div id="overdrive-label" class="overdrive-label hidden">OVERDRIVE ×2</div>
+      </div>
+
+      <div class="hud-right glass-chip">
+        <span class="hud-label" data-i18n="chain">CHAIN</span>
+        <strong id="hud-combo">x1</strong>
+      </div>
+    </section>
+
+    <div id="tutorial" class="tutorial hidden" aria-live="polite">
+      <div class="tutorial-pulse" aria-hidden="true"><span></span><span></span></div>
+      <strong data-i18n="tapShift">TAP TO SHIFT</strong>
+      <small data-i18n="tapShiftSub">Switch rings before impact</small>
     </div>
-  </div>
+
+    <div id="callout" class="callout hidden" aria-live="polite"></div>
+
+    <section id="overlay-how" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="how-title">
+      <div class="panel glass">
+        <div class="panel-kicker">RINGSHIFT</div>
+        <h2 id="how-title" data-i18n="howTitle">Read the orbit. Shift at the last moment.</h2>
+        <div class="how-grid">
+          <article>
+            <div class="how-icon shift-icon"><span></span><span></span></div>
+            <h3 data-i18n="howShift">SHIFT</h3>
+            <p data-i18n="howShiftBody">Tap, click, or press Space to jump between the inner and outer ring.</p>
+          </article>
+          <article>
+            <div class="how-icon shard-icon">◆</div>
+            <h3 data-i18n="howCharge">CHARGE</h3>
+            <p data-i18n="howChargeBody">Collect shards and skim hazards to build your chain and fill FLOW.</p>
+          </article>
+          <article>
+            <div class="how-icon rush-icon">×2</div>
+            <h3 data-i18n="howRush">OVERDRIVE</h3>
+            <p data-i18n="howRushBody">Fill FLOW to ignite a short ×2 scoring burst. Survive to keep it alive.</p>
+          </article>
+        </div>
+        <button id="btn-how-close" class="btn btn-primary" data-i18n="gotIt">GOT IT</button>
+      </div>
+    </section>
+
+    <section id="overlay-settings" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="panel glass settings-panel">
+        <div class="panel-kicker">RINGSHIFT</div>
+        <h2 id="settings-title" data-i18n="audioSettings">Audio</h2>
+        <label class="slider-row">
+          <span data-i18n="music">Music</span>
+          <input id="slider-music" type="range" min="0" max="100" value="78">
+        </label>
+        <label class="slider-row">
+          <span data-i18n="sfx">Sound effects</span>
+          <input id="slider-sfx" type="range" min="0" max="100" value="100">
+        </label>
+        <button id="btn-settings-close" class="btn btn-primary" data-i18n="done">DONE</button>
+      </div>
+    </section>
+
+    <section id="screen-gameover" class="screen hidden" aria-label="Run complete">
+      <div class="result-card glass">
+        <div id="result-badge" class="result-badge" data-i18n="runComplete">RUN COMPLETE</div>
+        <h2 id="result-headline" data-i18n="holdTheLine">HOLD THE LINE</h2>
+
+        <div class="result-score">
+          <span data-i18n="score">SCORE</span>
+          <strong id="result-score">0</strong>
+        </div>
+
+        <div id="new-best" class="new-best hidden" data-i18n="newBest">NEW BEST</div>
+
+        <div class="result-stats">
+          <div><span data-i18n="survived">SURVIVED</span><strong id="result-time">0.0s</strong></div>
+          <div><span data-i18n="bestCombo">BEST CHAIN</span><strong id="result-combo">x1</strong></div>
+          <div><span data-i18n="closeCalls">CLOSE CALLS</span><strong id="result-near">0</strong></div>
+        </div>
+
+        <button id="btn-retry" class="btn btn-primary">
+          <span data-i18n="runAgain">RUN AGAIN</span>
+          <span class="btn-key">SPACE</span>
+        </button>
+        <button id="btn-menu" class="btn btn-ghost" data-i18n="titleScreen">TITLE SCREEN</button>
+      </div>
+    </section>
+
+    <div id="sdk-paused" class="sdk-paused hidden" aria-hidden="true"></div>
+  </main>
 </body>
 </html>

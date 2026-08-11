@@ -30,12 +30,13 @@ it's non-binding, just planning input.)
 ## "Describe your game(s)."
 
 ```
-Ringshift is a one-touch neon arcade dodger built specifically for YouTube
+RingShift is a one-touch neon arcade dodger built specifically for YouTube
 Playables. Your ship auto-orbits a glowing core on one of two rings; tapping
-anywhere hops between rings to dodge mines and comets, collect gems, and
-build a combo multiplier while the orbit speeds up. Runs last 30 seconds to
-2 minutes — ideal for quick play sessions — and the best score is submitted
-through the Playables SDK.
+anywhere shifts rings to thread mines and comets, collect shards, and build
+a scoring chain that charges FLOW — fill it to ignite a short ×2 OVERDRIVE
+burst — while the orbit speeds up. Runs last 30 seconds to 2 minutes — ideal
+for quick play sessions — and the best score is submitted through the
+Playables SDK.
 
 It was engineered to the certification requirements from day one: the SDK
 lifecycle (firstFrameReady/gameReady), cloud saves (loadData awaited before
@@ -45,7 +46,7 @@ audio setting with separate music/SFX sliders and no in-game master mute.
 The game is localized in English, Spanish, Portuguese, French, and German
 via system.getLanguage, is playable in every aspect ratio from 9:32 to 32:9,
 meets WCAG AA contrast with 48dp touch targets and reduced-motion support,
-and makes zero external network calls. The whole bundle is ~58 KB of
+and makes zero external network calls. The whole bundle is under 70 KB of
 dependency-free vanilla JavaScript — interactive in under a second — with
 all art and audio original (sound is synthesized at runtime, so there are
 no music licensing encumbrances).
@@ -84,7 +85,7 @@ Useful true statements you can draw from:
   (`https://www.youtube.com/game_api/v1`) and passes an automated lifecycle
   verification equivalent to the SDK Test Suite checks (call ordering,
   save/score consistency, pause freeze, audio gating, localization).
-- Initial download ~58 KB (requirement: <30 MiB, recommended <15 MiB);
+- Initial download under 70 KB (requirement: <30 MiB, recommended <15 MiB);
   interactive in well under the recommended 5 seconds.
 - No external network calls, no third-party services, no ads, no data
   collection of any kind.

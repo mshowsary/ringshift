@@ -1,123 +1,52 @@
-(function (root) {
+(function(root){
   'use strict';
-  var RS = root.RS = root.RS || {};
-  var doc = root.document;
-  if (!doc) return; // browser-only module
+  var RS=root.RS=root.RS||{},doc=root.document;if(!doc)return;
+  function el(id){return doc.getElementById(id);}
+  var overlays=[],lastScore=-1,lastCombo=-1,lastFlow=-1;
 
-  function el(id) { return doc.getElementById(id); }
-
-  var screens = { splash: 'splash', menu: 'screen-menu', gameover: 'screen-gameover' };
-  var overlays = { pause: 'overlay-pause', settings: 'overlay-settings' };
-  var primaryButton = { menu: 'btn-play', gameover: 'btn-again', pause: 'btn-resume', settings: 'btn-close-settings' };
-  var overlayStack = [];
-  var lastScore = null;
-
-  RS.ui = {
-    show: function (name) {
-      for (var key in screens) {
-        el(screens[key]).classList.toggle('hidden', key !== name);
-      }
-      el('hud').classList.toggle('hidden', name !== null && name !== 'play');
-      var btn = primaryButton[name];
-      if (btn) {
-        try { el(btn).focus({ preventScroll: true }); } catch (e) {}
-      }
+  RS.ui={
+    showScreen:function(name){
+      ['screen-splash','screen-menu','screen-gameover'].forEach(function(id){el(id).classList.add('hidden');});
+      // 'play' has no screen element — it is canvas + HUD only.
+      if(name&&name!=='play'){var n=el('screen-'+name);if(n)n.classList.remove('hidden');}
+      el('hud').classList.toggle('hidden',name!=='play');
     },
-
-    showPlay: function () {
-      for (var key in screens) el(screens[key]).classList.add('hidden');
-      el('hud').classList.remove('hidden');
+    setMenu:function(save){
+      var stats=el('menu-stats');
+      if(save.best>0||save.runs>0){stats.classList.remove('hidden');el('menu-best').textContent=String(save.best);el('menu-combo').textContent='x'+save.bestCombo;}
+      else stats.classList.add('hidden');
     },
-
-    openOverlay: function (name) {
-      if (overlayStack.indexOf(name) !== -1) return;
-      overlayStack.push(name);
-      el(overlays[name]).classList.remove('hidden');
-      var btn = primaryButton[name];
-      if (btn) {
-        try { el(btn).focus({ preventScroll: true }); } catch (e) {}
-      }
+    resetHud:function(){lastScore=-1;lastCombo=-1;lastFlow=-1;el('hud-score').textContent='0';el('hud-combo').textContent='x1';el('flow-fill').style.width='0%';el('flow-spark').style.left='0%';el('flow-spark').style.opacity='0';el('overdrive-label').classList.add('hidden');el('status-kicker').textContent='FLOW';},
+    updateHud:function(g){
+      if(g.score!==lastScore){lastScore=g.score;el('hud-score').textContent=String(g.score);}
+      if(g.multiplier!==lastCombo){lastCombo=g.multiplier;el('hud-combo').textContent='x'+g.multiplier;}
+      var flow=Math.max(0,Math.min(100,g.flow));
+      if(Math.abs(flow-lastFlow)>.2){lastFlow=flow;el('flow-fill').style.width=flow+'%';el('flow-spark').style.left=flow+'%';el('flow-spark').style.opacity=flow>4&&flow<99?'1':'0';}
+      el('overdrive-label').classList.toggle('hidden',!g.overdrive);
+      el('status-kicker').textContent=g.overdrive?'FLOW BURN':'FLOW';
     },
-
-    closeOverlay: function (name) {
-      var target = name || overlayStack[overlayStack.length - 1];
-      if (!target) return;
-      var idx = overlayStack.indexOf(target);
-      if (idx !== -1) overlayStack.splice(idx, 1);
-      el(overlays[target]).classList.add('hidden');
+    setTutorial:function(v){el('tutorial').classList.toggle('hidden',!v);},
+    callout:function(text,kind){var n=el('callout');n.textContent=text;n.className='callout '+(kind||'');void n.offsetWidth;n.classList.remove('hidden');},
+    clearCallout:function(){el('callout').classList.add('hidden');},
+    showGameOver:function(info){
+      el('result-score').textContent=String(info.score);el('result-time').textContent=info.time.toFixed(1)+'s';el('result-combo').textContent='x'+info.combo;el('result-near').textContent=String(info.near);
+      el('new-best').classList.toggle('hidden',!info.newBest);el('result-headline').textContent=info.newBest?RS.i18n.t('newBest'):RS.i18n.t('holdTheLine');
+      this.showScreen('gameover');
+      try{el('btn-retry').focus({preventScroll:true});}catch(e){}
     },
-
-    topOverlay: function () {
-      return overlayStack.length ? overlayStack[overlayStack.length - 1] : null;
+    open:function(name){
+      var id='overlay-'+name;if(overlays.indexOf(name)<0)overlays.push(name);el(id).classList.remove('hidden');
+      var focus=name==='how'?'btn-how-close':'btn-settings-close';try{el(focus).focus({preventScroll:true});}catch(e){}
     },
-
-    updateHud: function (g) {
-      if (g.score !== lastScore) {
-        lastScore = g.score;
-        el('hud-score').textContent = String(g.score);
-      }
-      var combo = el('hud-combo');
-      if (g.multiplier > 1) {
-        combo.classList.remove('hidden');
-        var text = 'x' + g.multiplier;
-        if (combo.textContent !== text) {
-          combo.textContent = text;
-          combo.classList.add('pulse');
-          setTimeout(function () { combo.classList.remove('pulse'); }, 160);
-        }
-      } else {
-        combo.classList.add('hidden');
-        combo.textContent = 'x1';
-      }
-    },
-
-    resetHud: function () {
-      lastScore = null;
-      el('hud-score').textContent = '0';
-      el('hud-combo').classList.add('hidden');
-    },
-
-    showGameOver: function (info) {
-      el('over-score').textContent = String(info.score);
-      el('over-best').textContent = String(info.best);
-      el('over-newbest').classList.toggle('hidden', !info.isNew);
-      this.show('gameover');
-    },
-
-    updateMenuBest: function (best) {
-      var node = el('menu-best');
-      if (best > 0) {
-        node.textContent = RS.i18n.t('best') + ': ' + best;
-        node.classList.remove('hidden');
-      } else {
-        node.classList.add('hidden');
-      }
-    },
-
-    setHint: function (visible) {
-      el('howto-hint').classList.toggle('hidden', !visible);
-    },
-
-    setSliders: function (music, sfx) {
-      el('slider-music').value = String(Math.round(music * 100));
-      el('slider-sfx').value = String(Math.round(sfx * 100));
-    },
-
-    bindOnce: function (handlers) {
-      el('btn-play').addEventListener('click', handlers.onPlay);
-      el('btn-again').addEventListener('click', handlers.onPlay);
-      el('btn-pause').addEventListener('click', handlers.onPause);
-      el('btn-resume').addEventListener('click', handlers.onResume);
-      el('btn-pause-menu').addEventListener('click', handlers.onMenu);
-      el('btn-over-menu').addEventListener('click', handlers.onMenu);
-      el('btn-settings').addEventListener('click', handlers.onSettingsOpen);
-      el('btn-close-settings').addEventListener('click', handlers.onSettingsClose);
-      el('slider-music').addEventListener('input', function (ev) {
-        handlers.onMusic(Number(ev.target.value) / 100);
-      });
-      el('slider-sfx').addEventListener('input', function (ev) {
-        handlers.onSfx(Number(ev.target.value) / 100);
-      });
+    close:function(name){var n=name||overlays[overlays.length-1];if(!n)return;var i=overlays.indexOf(n);if(i>=0)overlays.splice(i,1);el('overlay-'+n).classList.add('hidden');},
+    topOverlay:function(){return overlays.length?overlays[overlays.length-1]:null;},
+    setSliders:function(m,s){el('slider-music').value=String(Math.round(m*100));el('slider-sfx').value=String(Math.round(s*100));},
+    bind:function(h){
+      el('btn-play').addEventListener('click',h.play);el('btn-retry').addEventListener('click',h.play);el('btn-menu').addEventListener('click',h.menu);
+      el('btn-how').addEventListener('click',function(){h.sfx();RS.ui.open('how');});el('btn-how-close').addEventListener('click',function(){h.sfx();RS.ui.close('how');});
+      el('btn-settings').addEventListener('click',function(){h.sfx();RS.ui.open('settings');});el('btn-settings-close').addEventListener('click',function(){h.sfx();RS.ui.close('settings');});
+      el('slider-music').addEventListener('input',function(e){h.music(Number(e.target.value)/100);});
+      el('slider-sfx').addEventListener('input',function(e){h.sfxVolume(Number(e.target.value)/100);});
     }
   };
-})(typeof window !== 'undefined' ? window : globalThis);
+})(typeof window!=='undefined'?window:globalThis);

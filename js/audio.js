@@ -1,247 +1,90 @@
-(function (root) {
+(function(root){
   'use strict';
-  var RS = root.RS = root.RS || {};
+  var RS=root.RS=root.RS||{};
+  var ctx=null,out=null,musicGain=null,sfxGain=null,enabled=true,musicVol=.78,sfxVol=1;
+  var timer=null,nextBeat=0,beat=0,nodes=[],noise=null,overdrive=false;
 
-  // Everything is synthesized at runtime: no audio files, no licensing risk.
-  // Graph: source -> envelope -> (musicGain|sfxGain) -> enabledGain -> out.
-  // enabledGain is the YouTube-level gate (isAudioEnabled); the in-game
-  // Music/SFX sliders only touch musicGain/sfxGain beneath it.
-
-  var ctx = null;
-  var enabledGain = null;
-  var musicGain = null;
-  var sfxGain = null;
-  var enabled = true;
-  var musicVol = 0.8;
-  var sfxVol = 1.0;
-  var noiseBuffer = null;
-  var musicTimer = null;
-  var musicNodes = [];
-  var nextNoteTime = 0;
-  var beat = 0;
-  var arpIndex = 2;
-
-  var BPM = 84;
-  var SECONDS_PER_BEAT = 60 / BPM;
-  // Am - F - C - G roots, 4 beats each
-  var CHORD_ROOTS = [110.0, 87.31, 130.81, 98.0];
-  var PENTA = [220.0, 261.63, 293.66, 329.63, 392.0, 440.0]; // A3 C4 D4 E4 G4 A4
-
-  function applyGains() {
-    if (!ctx) return;
-    var now = ctx.currentTime;
-    enabledGain.gain.setTargetAtTime(enabled ? 1 : 0, now, 0.01);
-    musicGain.gain.setTargetAtTime(musicVol * 0.5, now, 0.02);
-    sfxGain.gain.setTargetAtTime(sfxVol, now, 0.02);
+  function gainAt(parent,t,a,d,level){
+    var g=ctx.createGain();g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(Math.max(.0001,level),t+a);
+    g.gain.exponentialRampToValueAtTime(.0001,t+a+d);g.connect(parent);return g;
+  }
+  function osc(type,f,t){
+    var o=ctx.createOscillator();o.type=type;o.frequency.setValueAtTime(f,t);return o;
+  }
+  function buildNoise(){
+    var b=ctx.createBuffer(1,ctx.sampleRate*.5,ctx.sampleRate),d=b.getChannelData(0);
+    for(var i=0;i<d.length;i++)d[i]=Math.random()*2-1;return b;
+  }
+  function apply(){
+    if(!ctx)return;
+    var now=ctx.currentTime;
+    out.gain.setTargetAtTime(enabled?1:0,now,.015);
+    musicGain.gain.setTargetAtTime(musicVol*.34,now,.025);
+    sfxGain.gain.setTargetAtTime(sfxVol*.55,now,.02);
+  }
+  function tone(f,t,d,vol,type){
+    var o=osc(type||'sine',f,t);o.connect(gainAt(sfxGain,t,.006,d,vol));o.start(t);o.stop(t+d+.03);
+  }
+  function filteredNoise(t,d,vol,freq){
+    var s=ctx.createBufferSource();s.buffer=noise;var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.frequency.value=freq;bp.Q.value=3;
+    s.connect(bp);bp.connect(gainAt(sfxGain,t,.003,d,vol));s.start(t);s.stop(t+d+.02);
   }
 
-  function makeNoiseBuffer() {
-    var len = ctx.sampleRate;
-    var buf = ctx.createBuffer(1, len, ctx.sampleRate);
-    var data = buf.getChannelData(0);
-    for (var i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
-    return buf;
-  }
-
-  function env(target, t0, attack, peak, decay) {
-    var g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(Math.max(peak, 0.0001), t0 + attack);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + attack + decay);
-    g.connect(target);
-    return g;
-  }
-
-  function osc(type, freq, t0) {
-    var o = ctx.createOscillator();
-    o.type = type;
-    o.frequency.setValueAtTime(freq, t0);
-    return o;
-  }
-
-  var SFX = {
-    hop: function (t0) {
-      var o = osc('square', 300, t0);
-      o.frequency.exponentialRampToValueAtTime(520, t0 + 0.06);
-      o.connect(env(sfxGain, t0, 0.005, 0.22, 0.065));
-      o.start(t0); o.stop(t0 + 0.09);
+  var FX={
+    hop:function(t){tone(520,t,.08,.18,'triangle');tone(760,t+.025,.07,.10,'sine');},
+    shard:function(t){tone(880,t,.10,.18,'sine');tone(1320,t+.045,.12,.12,'sine');},
+    close:function(t){filteredNoise(t,.09,.10,2100);tone(440,t,.10,.08,'triangle');},
+    perfect:function(t){tone(660,t,.09,.16,'sine');tone(990,t+.04,.11,.14,'sine');tone(1480,t+.085,.13,.12,'sine');},
+    armed:function(t){tone(145,t,.08,.08,'square');},
+    milestone:function(t){tone(392,t,.16,.10,'sine');tone(523.25,t+.07,.17,.10,'sine');},
+    rush:function(t){filteredNoise(t,.26,.15,1800);[440,554.37,659.25,880].forEach(function(f,i){tone(f,t+i*.055,.22,.10,'sine');});},
+    death:function(t){
+      var o=osc('sawtooth',250,t);o.frequency.exponentialRampToValueAtTime(42,t+.52);o.connect(gainAt(sfxGain,t,.004,.55,.17));o.start(t);o.stop(t+.58);
+      filteredNoise(t,.30,.18,780);
     },
-    gem: function (t0, opts) {
-      var combo = Math.min((opts && opts.combo) || 1, 5);
-      var f = 660 * (1 + 0.12 * combo);
-      var o1 = osc('sine', f, t0);
-      o1.connect(env(sfxGain, t0, 0.006, 0.3, 0.13));
-      o1.start(t0); o1.stop(t0 + 0.16);
-      var o2 = osc('sine', f * 1.19, t0); // minor third overtone
-      o2.connect(env(sfxGain, t0, 0.006, 0.12, 0.11));
-      o2.start(t0); o2.stop(t0 + 0.14);
-    },
-    nearmiss: function (t0) {
-      var src = ctx.createBufferSource();
-      src.buffer = noiseBuffer;
-      var bp = ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.setValueAtTime(1800, t0);
-      bp.Q.value = 4;
-      src.connect(bp);
-      bp.connect(env(sfxGain, t0, 0.04, 0.18, 0.09));
-      src.start(t0); src.stop(t0 + 0.14);
-    },
-    death: function (t0) {
-      var o = osc('sawtooth', 220, t0);
-      o.frequency.exponentialRampToValueAtTime(38, t0 + 0.5);
-      o.connect(env(sfxGain, t0, 0.005, 0.35, 0.5));
-      o.start(t0); o.stop(t0 + 0.55);
-      var src = ctx.createBufferSource();
-      src.buffer = noiseBuffer;
-      var lp = ctx.createBiquadFilter();
-      lp.type = 'lowpass';
-      lp.frequency.setValueAtTime(1200, t0);
-      lp.frequency.exponentialRampToValueAtTime(120, t0 + 0.2);
-      src.connect(lp);
-      lp.connect(env(sfxGain, t0, 0.002, 0.3, 0.2));
-      src.start(t0); src.stop(t0 + 0.25);
-    },
-    ui: function (t0) {
-      var o = osc('triangle', 1200, t0);
-      o.connect(env(sfxGain, t0, 0.003, 0.15, 0.035));
-      o.start(t0); o.stop(t0 + 0.05);
-    },
-    fanfare: function (t0) {
-      var notes = [440, 554.37, 659.25]; // A4 C#5 E5
-      for (var i = 0; i < notes.length; i++) {
-        var o = osc('sine', notes[i], t0 + i * 0.09);
-        o.connect(env(sfxGain, t0 + i * 0.09, 0.008, 0.25, 0.2));
-        o.start(t0 + i * 0.09); o.stop(t0 + i * 0.09 + 0.24);
-      }
-    }
+    ui:function(t){tone(900,t,.045,.09,'sine');},
+    best:function(t){[523.25,659.25,783.99,1046.5].forEach(function(f,i){tone(f,t+i*.07,.22,.10,'sine');});}
   };
 
-  function scheduleMusic() {
-    if (!ctx) return;
-    var ahead = ctx.currentTime + 0.3;
-    while (nextNoteTime < ahead) {
-      var t0 = nextNoteTime;
-      var chord = CHORD_ROOTS[Math.floor(beat / 4) % CHORD_ROOTS.length];
-
-      // Pad: two detuned triangles at the chord root on beat 1 of each bar
-      if (beat % 4 === 0) {
-        for (var d = -1; d <= 1; d += 2) {
-          var pad = ctx.createOscillator();
-          pad.type = 'triangle';
-          pad.frequency.setValueAtTime(chord * Math.pow(2, d * 6 / 1200), t0);
-          var lp = ctx.createBiquadFilter();
-          lp.type = 'lowpass';
-          lp.frequency.value = 900;
-          pad.connect(lp);
-          var padDur = SECONDS_PER_BEAT * 4;
-          var g = ctx.createGain();
-          g.gain.setValueAtTime(0.0001, t0);
-          g.gain.exponentialRampToValueAtTime(0.1, t0 + 0.4);
-          g.gain.setValueAtTime(0.1, t0 + padDur - 0.5);
-          g.gain.exponentialRampToValueAtTime(0.0001, t0 + padDur);
-          lp.connect(g);
-          g.connect(musicGain);
-          pad.start(t0); pad.stop(t0 + padDur + 0.05);
-          musicNodes.push(pad);
-        }
+  var roots=[110,123.47,98,130.81],arp=[220,261.63,293.66,329.63,392,440,523.25,587.33];
+  function schedule(){
+    if(!ctx||!timer)return;
+    var horizon=ctx.currentTime+.28,spb=60/(overdrive?132:112);
+    while(nextBeat<horizon){
+      var t=nextBeat,rootF=roots[Math.floor(beat/4)%roots.length];
+      if(beat%4===0){
+        var pad=osc('triangle',rootF,t),lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=overdrive?1400:850;
+        var g=ctx.createGain();g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.15,t+.22);g.gain.exponentialRampToValueAtTime(.0001,t+spb*3.8);
+        pad.connect(lp);lp.connect(g);g.connect(musicGain);pad.start(t);pad.stop(t+spb*4);nodes.push(pad);
       }
-
-      // Arp: one pentatonic note per half-beat, gentle random walk
-      for (var h = 0; h < 2; h++) {
-        var ta = t0 + h * SECONDS_PER_BEAT / 2;
-        arpIndex += Math.random() < 0.5 ? -1 : 1;
-        if (arpIndex < 0) arpIndex = 1;
-        if (arpIndex >= PENTA.length) arpIndex = PENTA.length - 2;
-        var note = osc('sine', PENTA[arpIndex], ta);
-        note.connect(env(musicGain, ta, 0.01, 0.07, 0.17));
-        note.start(ta); note.stop(ta + 0.2);
-        musicNodes.push(note);
-      }
-
-      // Trim the bookkeeping list so it does not grow unbounded.
-      if (musicNodes.length > 64) musicNodes.splice(0, musicNodes.length - 64);
-
-      nextNoteTime += SECONDS_PER_BEAT;
-      beat++;
+      var idx=(beat*3+(overdrive?2:0))%arp.length,n=osc('sine',arp[idx],t);
+      n.connect(gainAt(musicGain,t,.01,.12,overdrive?.16:.09));n.start(t);n.stop(t+.16);nodes.push(n);
+      if(overdrive&&beat%2===0){var bass=osc('square',rootF/2,t);bass.connect(gainAt(musicGain,t,.004,.08,.06));bass.start(t);bass.stop(t+.10);nodes.push(bass);}
+      nextBeat+=spb;beat++;
+      if(nodes.length>72)nodes.splice(0,nodes.length-72);
     }
   }
 
-  RS.audio = {
-    get ready() { return !!ctx; },
-
-    // Must be called from a user-gesture handler (autoplay policy).
-    init: function () {
-      if (ctx) {
-        if (ctx.state === 'suspended') { try { ctx.resume(); } catch (e) {} }
-        return;
-      }
-      var AC = root.AudioContext || root.webkitAudioContext;
-      if (!AC) return;
-      try {
-        ctx = new AC();
-      } catch (e) { ctx = null; return; }
-      enabledGain = ctx.createGain();
-      enabledGain.connect(ctx.destination);
-      musicGain = ctx.createGain();
-      musicGain.connect(enabledGain);
-      sfxGain = ctx.createGain();
-      sfxGain.connect(enabledGain);
-      noiseBuffer = makeNoiseBuffer();
-      applyGains();
+  RS.audio={
+    init:function(){
+      if(ctx){try{if(ctx.state==='suspended')ctx.resume();}catch(e){}return;}
+      var AC=root.AudioContext||root.webkitAudioContext;if(!AC)return;
+      try{ctx=new AC();}catch(e){ctx=null;return;}
+      out=ctx.createGain();out.connect(ctx.destination);musicGain=ctx.createGain();musicGain.connect(out);sfxGain=ctx.createGain();sfxGain.connect(out);noise=buildNoise();apply();
     },
-
-    setEnabled: function (on) {
-      enabled = !!on;
-      applyGains();
+    setEnabled:function(v){enabled=!!v;apply();},
+    setMusic:function(v){musicVol=Math.max(0,Math.min(1,Number(v)||0));apply();},
+    setSfx:function(v){sfxVol=Math.max(0,Math.min(1,Number(v)||0));apply();},
+    setOverdrive:function(v){overdrive=!!v;},
+    startMusic:function(){
+      if(!ctx||timer)return;nextBeat=ctx.currentTime+.03;beat=0;timer=root.setInterval(schedule,90);schedule();
     },
-
-    setMusicVolume: function (v) {
-      musicVol = Math.min(Math.max(Number(v) || 0, 0), 1);
-      applyGains();
+    stopMusic:function(){
+      if(timer){root.clearInterval(timer);timer=null;}
+      for(var i=0;i<nodes.length;i++){try{nodes[i].stop();}catch(e){}}nodes.length=0;
     },
-
-    setSfxVolume: function (v) {
-      sfxVol = Math.min(Math.max(Number(v) || 0, 0), 1);
-      applyGains();
-    },
-
-    suspend: function () {
-      this.stopMusic();
-      if (ctx && ctx.state === 'running') {
-        try { ctx.suspend(); } catch (e) {}
-      }
-    },
-
-    resume: function () {
-      if (ctx && ctx.state === 'suspended') {
-        try { ctx.resume(); } catch (e) {}
-      }
-    },
-
-    sfx: function (name, opts) {
-      if (!ctx || !enabled || ctx.state !== 'running') return;
-      var recipe = SFX[name];
-      if (!recipe) return;
-      try { recipe(ctx.currentTime, opts); } catch (e) {}
-    },
-
-    startMusic: function () {
-      if (!ctx || musicTimer) return;
-      nextNoteTime = ctx.currentTime + 0.05;
-      scheduleMusic();
-      musicTimer = setInterval(scheduleMusic, 100);
-    },
-
-    stopMusic: function () {
-      if (musicTimer) {
-        clearInterval(musicTimer);
-        musicTimer = null;
-      }
-      for (var i = 0; i < musicNodes.length; i++) {
-        try { musicNodes[i].stop(); } catch (e) {}
-      }
-      musicNodes.length = 0;
-    }
+    suspend:function(){this.stopMusic();if(ctx&&ctx.state==='running'){try{ctx.suspend();}catch(e){}}},
+    resume:function(){if(ctx&&ctx.state==='suspended'){try{ctx.resume();}catch(e){}}},
+    sfx:function(name){if(!ctx||!enabled||ctx.state!=='running'||!FX[name])return;try{FX[name](ctx.currentTime);}catch(e){}}
   };
-})(typeof window !== 'undefined' ? window : globalThis);
+})(typeof window!=='undefined'?window:globalThis);
