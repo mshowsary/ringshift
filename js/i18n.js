@@ -19,7 +19,8 @@
       best: 'Best',
       newBest: 'New best!',
       playAgain: 'Play again',
-      howtoHint: 'Tap to switch rings'
+      howtoHint: 'Tap to switch rings',
+      pause: 'Pause'
     },
     es: {
       loading: 'Cargando…',
@@ -37,7 +38,8 @@
       best: 'Récord',
       newBest: '¡Nuevo récord!',
       playAgain: 'Jugar otra vez',
-      howtoHint: 'Toca para cambiar de anillo'
+      howtoHint: 'Toca para cambiar de anillo',
+      pause: 'Pausa'
     },
     pt: {
       loading: 'Carregando…',
@@ -55,7 +57,8 @@
       best: 'Recorde',
       newBest: 'Novo recorde!',
       playAgain: 'Jogar de novo',
-      howtoHint: 'Toque para trocar de anel'
+      howtoHint: 'Toque para trocar de anel',
+      pause: 'Pausa'
     },
     fr: {
       loading: 'Chargement…',
@@ -73,7 +76,8 @@
       best: 'Record',
       newBest: 'Nouveau record !',
       playAgain: 'Rejouer',
-      howtoHint: "Touchez pour changer d'anneau"
+      howtoHint: "Touchez pour changer d'anneau",
+      pause: 'Pause'
     },
     de: {
       loading: 'Lädt…',
@@ -91,7 +95,8 @@
       best: 'Rekord',
       newBest: 'Neuer Rekord!',
       playAgain: 'Nochmal spielen',
-      howtoHint: 'Tippe, um den Ring zu wechseln'
+      howtoHint: 'Tippe, um den Ring zu wechseln',
+      pause: 'Pause'
     }
   };
 
@@ -116,12 +121,17 @@
       return key;
     },
 
-    // Browser only: stamp every [data-i18n] element with its translation.
+    // Browser only: stamp every [data-i18n] element with its translation,
+    // and every [data-i18n-aria] element's aria-label.
     apply: function (doc) {
       if (!doc || !doc.querySelectorAll) return;
       var nodes = doc.querySelectorAll('[data-i18n]');
       for (var i = 0; i < nodes.length; i++) {
         nodes[i].textContent = this.t(nodes[i].getAttribute('data-i18n'));
+      }
+      var ariaNodes = doc.querySelectorAll('[data-i18n-aria]');
+      for (var j = 0; j < ariaNodes.length; j++) {
+        ariaNodes[j].setAttribute('aria-label', this.t(ariaNodes[j].getAttribute('data-i18n-aria')));
       }
     }
   };

@@ -25,6 +25,7 @@
     var particles = [];
     var trail = [];
     var vw = 0, vh = 0;
+    var vignette = null;
 
     var r = {
       arena: { cx: 0, cy: 0, R: 100 }
@@ -40,6 +41,12 @@
       r.arena.cx = vw / 2;
       r.arena.cy = vh / 2;
       r.arena.R = Math.min(vw, vh) * 0.36;
+      vignette = ctx.createRadialGradient(
+        r.arena.cx, r.arena.cy, Math.min(vw, vh) * 0.35,
+        r.arena.cx, r.arena.cy, Math.max(vw, vh) * 0.75
+      );
+      vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      vignette.addColorStop(1, 'rgba(0, 0, 0, 0.45)');
       // Refill the starfield to cover the (possibly larger) viewport.
       var count = Math.ceil(vw * vh / 9000);
       stars.length = 0;
@@ -150,10 +157,10 @@
       for (var i = 0; i < trail.length; i++) {
         var p = trail[i];
         var k = (i + 1) / trail.length;
-        ctx.globalAlpha = 0.28 * k;
+        ctx.globalAlpha = 0.4 * k;
         ctx.fillStyle = COLORS.ship;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 5 * k, 0, TAU);
+        ctx.arc(p.x, p.y, 6 * k, 0, TAU);
         ctx.fill();
       }
       ctx.globalAlpha = 1;
@@ -319,8 +326,34 @@
       }
 
       drawStars(t, fx.reducedMotion);
+      if (vignette) {
+        ctx.fillStyle = vignette;
+        ctx.fillRect(0, 0, vw, vh);
+      }
       drawRings(t);
       drawCore(t, fx.reducedMotion);
+
+      // Menu idle scene: a lone ship cruising the outer ring
+      if (!g && fx.idleAngle != null) {
+        var ip = pos(RS.GAME_C.RING_R[1], fx.idleAngle);
+        ctx.save();
+        ctx.translate(ip.x, ip.y);
+        ctx.rotate(fx.idleAngle + Math.PI / 2);
+        ctx.globalAlpha = 0.55;
+        ctx.shadowColor = COLORS.ship;
+        ctx.shadowBlur = 12;
+        ctx.fillStyle = COLORS.ship;
+        var isz = r.arena.R * 0.09;
+        ctx.beginPath();
+        ctx.moveTo(isz, 0);
+        ctx.lineTo(-isz * 0.7, isz * 0.62);
+        ctx.lineTo(-isz * 0.35, 0);
+        ctx.lineTo(-isz * 0.7, -isz * 0.62);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
 
       if (g) {
         for (var i = 0; i < g.entities.length; i++) {

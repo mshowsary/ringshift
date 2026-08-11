@@ -178,7 +178,8 @@
       dt: dt,
       shake: shake,
       reducedMotion: reducedMotion,
-      showShip: !(game && game.state === 'over')
+      showShip: !(game && game.state === 'over'),
+      idleAngle: showGame ? null : elapsed * 0.5
     });
   }
 
