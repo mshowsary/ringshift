@@ -1,0 +1,10 @@
+{
+  "name": "ringshift",
+  "private": true,
+  "scripts": {
+    "test": "node --test \"tests/*.test.js\""
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.5.0"
+  }
+}
