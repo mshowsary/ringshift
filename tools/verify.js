@@ -17,7 +17,7 @@
 const puppeteer = require('puppeteer-core');
 
 const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-const BASE = 'http://localhost:8080';
+const BASE = process.env.VERIFY_BASE || 'http://localhost:8080';
 const SHOT_DIR = process.argv[2] || null;
 
 const FAKE_YTGAME = `
